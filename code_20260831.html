@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公开链接分享库</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {box-sizing: border-box;margin:0;padding:0;font-family:system-ui}
+        body{max-width:900px;margin:0 auto;padding:20px;background:#f7f9fc}
+        .header{margin-bottom:24px}
+        h1{margin-bottom:8px;color:#1f2937}
+        .admin-panel{background:#fff;padding:16px;border-radius:10px;margin-bottom:20px;box-shadow:0 1px 4px #0001}
+        input{width:100%;padding:10px;margin:8px 0;border:1px solid #ddd;border-radius:6px;font-size:16px}
+        button{padding:10px 16px;border:none;border-radius:6px;background:#2563eb;color:white;margin:4px;cursor:pointer}
+        button.del{background:#dc2626}
+        button.logout{background:#6b7280}
+        .item{background:#fff;padding:14px;border-radius:8px;margin:10px 0;box-shadow:0 1px 3px #0001}
+        .link{color:#2563eb;font-size:17px;word-break:break-all}
+        .status{margin-bottom:10px;color:#333}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>公开链接分享库</h1>
+        <p>访客可浏览全部链接，仅登录管理员账号可编辑</p>
+    </div>
+
+    <div class="admin-panel">
+        <div class="status" id="statusText"></div>
+        <div id="loginArea">
+            <input type="email" id="email" placeholder="邮箱">
+            <input type="password" id="password" placeholder="密码">
+            <button onclick="signIn()">登录</button>
+        </div>
+        <div id="editArea" style="display:none">
+            <input type="text" id="title" placeholder="链接标题">
+            <input type="url" id="url" placeholder="粘贴链接地址">
+            <button onclick="addLink()">新增链接</button>
+            <button class="logout" onclick="signOut()">退出登录</button>
+        </div>
+    </div>
+
+    <div id="list"></div>
+
+    <script>
+        // ========== 替换为你自己Supabase的URL和anon key ==========
+        const SUPABASE_URL = "https://xaupwpgwanytlxirric.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_iXkcTw5cVLhRUqZ9laL51w_KRysGxg-";
+        // ========================================================
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let user = null;
+
+        supabase.auth.onAuthStateChange((event, session) => {
+            user = session?.user;
+            updateUi();
+            render();
+        });
+
+        function updateUi(){
+            const loginArea = document.getElementById("loginArea");
+            const editArea = document.getElementById("editArea");
+            const statusText = document.getElementById("statusText");
+            if(user){
+                statusText.innerText = `✅已登录：${user.email}`;
+                loginArea.style.display = "none";
+                editArea.style.display = "block";
+            }else{
+                statusText.innerText = "🔒未登录，登录后才可新增/删除链接";
+                loginArea.style.display = "block";
+                editArea.style.display = "none";
+            }
+        }
+
+        async function signIn(){
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value.trim();
+            const {error} = await supabase.auth.signInWithPassword({email,password});
+            if(error){
+                alert("登录失败："+error.message);
+            }
+        }
+
+        async function signOut(){
+            await supabase.auth.signOut();
+        }
+
+        async function addLink(){
+            if(!user) return alert("请先登录管理员账号");
+            const title = document.getElementById("title").value.trim();
+            const url = document.getElementById("url").value.trim();
+            if(!title || !url) return alert("请填写标题和链接");
+            await supabase.from("links").insert([{title,url}]);
+            document.getElementById("title").value="";
+            document.getElementById("url").value="";
+            render();
+        }
+
+        async function del(id){
+            if(!user) return alert("请先登录管理员账号");
+            if(confirm("确认删除该链接？")){
+                await supabase.from("links").delete().eq("id",id);
+                render();
+            }
+        }
+
+        async function render(){
+            const {data} = await supabase.from("links").select("*").order("created_at",{asc:false});
+            const dom = document.getElementById("list");
+            dom.innerHTML = "";
+            data.forEach(row=>{
+                const div = document.createElement("div");
+                div.className="item";
+                div.innerHTML = `
+                    <div><strong>${row.title}</strong></div>
+                    <a class="link" target="_blank" href="${row.url}">${row.url}</a>
+                    ${user ? `<button class="del" onclick="del(${row.id})">删除</button>` : ""}
+                `;
+                dom.appendChild(div);
+            })
+        }
+
+        updateUi();
+        render();
+    </script>
+</body>
+</html>
